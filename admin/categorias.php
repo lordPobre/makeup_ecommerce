@@ -34,7 +34,7 @@ $categories = $stmt->fetchAll();
             <div class="brand">G&B Admin</div>
             <nav>
                 <ul>
-                    <li><a href="index.php">Órdenes</a></li>
+                    <li><a href="index.php" class="active">Dashboard</a></li>
                     <li><a href="productos.php">Productos</a></li>
                     <li><a href="categorias.php">Categorías</a></li>
                     <li><a href="marcas.php">Marcas</a></li>

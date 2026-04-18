@@ -23,6 +23,10 @@ require_once '../includes/header.php';
                     </div>
                 </div>
                 <div class="form-group">
+                    <label for="rut">RUT</label>
+                    <input type="text" name="rut" id="rut" class="form-control" placeholder="12.345.678-9" required>
+                </div>
+                <div class="form-group">
                     <label>Correo Electrónico</label>
                     <input type="email" name="email" required placeholder="tu@email.com">
                 </div>
@@ -49,5 +53,14 @@ require_once '../includes/header.php';
         </section>
     </div>
 </main>
+
+<script>
+    document.getElementById('rut')?.addEventListener('input', function(e) {
+    let value = e.target.value.replace(/\./g, '').replace('-', '');
+    if (value.match(/^(\d{2})(\d{3})(\d{3})([\dkK]{1})$/)) {
+        e.target.value = value.replace(/^(\d{2})(\d{3})(\d{3})([\dkK]{1})$/, '$1.$2.$3-$4');
+    }
+});
+</script>
 
 <?php require_once '../includes/footer.php'; ?>

@@ -13,12 +13,14 @@ if (!$id) {
 $mensaje = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $name = filter_input(INPUT_POST, 'name', FILTER_SANITIZE_STRING);
+    // Limpieza moderna para PHP 8.1+
+    $name = htmlspecialchars(trim($_POST['name'] ?? ''), ENT_QUOTES, 'UTF-8');
     $category_id = filter_input(INPUT_POST, 'category_id', FILTER_VALIDATE_INT);
-    $description = filter_input(INPUT_POST, 'description', FILTER_SANITIZE_STRING);
+    $description = htmlspecialchars(trim($_POST['description'] ?? ''), ENT_QUOTES, 'UTF-8');
+    
     $is_cruelty_free = isset($_POST['is_cruelty_free']) ? 1 : 0;
     $available = isset($_POST['available']) ? 1 : 0;
-    $tones = $_POST['tones'] ?? ''; 
+    $tones = htmlspecialchars(trim($_POST['tones'] ?? ''), ENT_QUOTES, 'UTF-8'); 
     
     // CAPTURAR EL ID DE LA MARCA
     $brand_id = filter_input(INPUT_POST, 'brand_id', FILTER_VALIDATE_INT) ?: null;
@@ -26,13 +28,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $price_input = $_POST['price'] ?? '';
     $price = (int) preg_replace('/[^0-9]/', '', $price_input);
 
+    // NUEVO: Capturar el stock
+    $stock = (int)($_POST['stock'] ?? 0);
+
     if (empty($name) || empty($category_id) || $price <= 0) {
         $mensaje = "Por favor, completa los campos obligatorios.";
     } else {
         $update_image_sql = "";
         
-        // AGREGAR $brand_id A LA LISTA DE PARÁMETROS
-        $params = [$name, $category_id, $price, $description, $is_cruelty_free, $available, $tones, $brand_id];
+        // AGREGAMOS $stock A LA LISTA DE PARÁMETROS
+        $params = [$name, $category_id, $price, $description, $is_cruelty_free, $available, $tones, $brand_id, $stock];
 
         if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
             $upload_dir = '../public/img/';
@@ -48,10 +53,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $params[] = $id; 
 
         try {
-            // AÑADIR brand_id = ? EN LA CONSULTA SQL
+            // AÑADIMOS stock = ? EN LA CONSULTA SQL
             $stmt = $pdo->prepare("
                 UPDATE products 
-                SET name = ?, category_id = ?, price = ?, description = ?, is_cruelty_free = ?, available = ?, tones = ?, brand_id = ? $update_image_sql
+                SET name = ?, category_id = ?, price = ?, description = ?, is_cruelty_free = ?, available = ?, tones = ?, brand_id = ?, stock = ? $update_image_sql
                 WHERE id = ?
             ");
             $stmt->execute($params);
@@ -64,7 +69,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// CORREGIDO: Sintaxis correcta para el array del execute
 $stmt = $pdo->prepare("SELECT * FROM products WHERE id = ?");
 $stmt->execute([$id]);
 $product = $stmt->fetch();
@@ -75,7 +79,6 @@ if (!$product) {
 }
 
 $categories = $pdo->query("SELECT * FROM categories")->fetchAll();
-// TRAER LAS MARCAS PARA EL SELECTOR
 $brands = $pdo->query("SELECT * FROM brands")->fetchAll();
 ?>
 
@@ -93,8 +96,8 @@ $brands = $pdo->query("SELECT * FROM brands")->fetchAll();
             <div class="brand">G&B Admin</div>
             <nav>
                 <ul>
-                    <li><a href="index.php">Órdenes</a></li>
-                    <li><a href="productos.php" class="active">Productos</a></li>
+                    <li><a href="index.php" class="active">Dashboard</a></li>
+                    <li><a href="productos.php">Productos</a></li>
                     <li><a href="categorias.php">Categorías</a></li>
                     <li><a href="marcas.php">Marcas</a></li>
                     <li><a href="../public/index.php" target="_blank">Ver Tienda</a></li>
@@ -123,32 +126,41 @@ $brands = $pdo->query("SELECT * FROM brands")->fetchAll();
                         <input type="text" name="name" value="<?= htmlspecialchars($product['name']) ?>" required style="width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px;">
                     </div>
                     
-                    <div style="margin-bottom: 15px;">
-                        <label>Categoría</label><br>
-                        <select name="category_id" required style="width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px;">
-                            <?php foreach ($categories as $cat): ?>
-                                <option value="<?= $cat['id'] ?>" <?= ($cat['id'] == $product['category_id']) ? 'selected' : '' ?>>
-                                    <?= htmlspecialchars($cat['name']) ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
+                    <div style="display: flex; gap: 15px; margin-bottom: 15px;">
+                        <div style="flex: 1;">
+                            <label>Categoría</label><br>
+                            <select name="category_id" required style="width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px;">
+                                <?php foreach ($categories as $cat): ?>
+                                    <option value="<?= $cat['id'] ?>" <?= ($cat['id'] == $product['category_id']) ? 'selected' : '' ?>>
+                                        <?= htmlspecialchars($cat['name']) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+
+                        <div style="flex: 1;">
+                            <label>Marca</label><br>
+                            <select name="brand_id" style="width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px;">
+                                <option value="">Sin marca específica...</option>
+                                <?php foreach ($brands as $b): ?>
+                                    <option value="<?= $b['id'] ?>" <?= ($b['id'] == $product['brand_id']) ? 'selected' : '' ?>>
+                                        <?= htmlspecialchars($b['name']) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
                     </div>
 
-                    <div style="margin-bottom: 15px;">
-                        <label>Marca</label><br>
-                        <select name="brand_id" style="width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px;">
-                            <option value="">Sin marca específica...</option>
-                            <?php foreach ($brands as $b): ?>
-                                <option value="<?= $b['id'] ?>" <?= ($b['id'] == $product['brand_id']) ? 'selected' : '' ?>>
-                                    <?= htmlspecialchars($b['name']) ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
+                    <div style="display: flex; gap: 15px; margin-bottom: 15px;">
+                        <div style="flex: 1;">
+                            <label>Precio (CLP)</label><br>
+                            <input type="number" name="price" value="<?= $product['price'] ?>" required style="width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px;">
+                        </div>
 
-                    <div style="margin-bottom: 15px;">
-                        <label>Precio (CLP)</label><br>
-                        <input type="number" name="price" value="<?= $product['price'] ?>" required style="width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px;">
+                        <div style="flex: 1;">
+                            <label>Cantidad en Stock</label><br>
+                            <input type="number" name="stock" value="<?= (int)($product['stock'] ?? 0) ?>" min="0" required style="width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px; font-weight: bold; color: #2c3e50;">
+                        </div>
                     </div>
 
                     <div style="margin-bottom: 15px;">
@@ -157,7 +169,7 @@ $brands = $pdo->query("SELECT * FROM brands")->fetchAll();
                     </div>
 
                     <div style="margin-bottom: 15px;">
-                        <label>Foto del Producto</label><br>
+                        <label>Actualizar Foto (Opcional)</label><br>
                         <input type="file" name="image" accept="image/*" style="margin-top: 5px; margin-bottom: 10px;">
                     </div>
 
@@ -166,14 +178,11 @@ $brands = $pdo->query("SELECT * FROM brands")->fetchAll();
                         <textarea name="description" rows="4" required style="width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px;"><?= htmlspecialchars($product['description']) ?></textarea>
                     </div>
 
-                    <div style="margin-bottom: 15px;">
+                    <div style="display: flex; gap: 20px; margin-bottom: 25px;">
                         <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
                             <input type="checkbox" name="is_cruelty_free" value="1" <?= $product['is_cruelty_free'] ? 'checked' : '' ?>>
                             Es Cruelty Free 🐰
                         </label>
-                    </div>
-
-                    <div style="margin-bottom: 25px;">
                         <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
                             <input type="checkbox" name="available" value="1" <?= $product['available'] ? 'checked' : '' ?>>
                             Producto Activo

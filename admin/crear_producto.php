@@ -11,12 +11,18 @@ $brands = $stmtBrands->fetchAll();
 $mensaje = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $name = filter_input(INPUT_POST, 'name', FILTER_SANITIZE_STRING);
+    // Limpieza de datos moderna y segura para PHP 8.1+
+    $name = htmlspecialchars(trim($_POST['name'] ?? ''), ENT_QUOTES, 'UTF-8');
     $category_id = filter_input(INPUT_POST, 'category_id', FILTER_VALIDATE_INT);
-    $description = filter_input(INPUT_POST, 'description', FILTER_SANITIZE_STRING);
+    $description = htmlspecialchars(trim($_POST['description'] ?? ''), ENT_QUOTES, 'UTF-8');
+    
     $is_cruelty_free = isset($_POST['is_cruelty_free']) ? 1 : 0;
+    
     $price_input = $_POST['price'] ?? '';
     $price = (int) preg_replace('/[^0-9]/', '', $price_input);
+    
+    // Capturamos el stock que viene del formulario
+    $stock = (int)($_POST['stock'] ?? 0);
 
     if (empty($name) || empty($category_id) || $price <= 0) {
         $mensaje = "Por favor, completa el nombre, selecciona una categoría y pon un precio válido.";
@@ -33,12 +39,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $image_path = 'https://images.unsplash.com/photo-1596462502278-27bf85033e5a?q=80&w=1000&auto=format&fit=crop';
         }
+        
         try {
+            // Agregamos 'stock' a la consulta INSERT
             $stmt = $pdo->prepare("
-                INSERT INTO products (name, category_id, price, description, is_cruelty_free, image_path, available) 
-                VALUES (?, ?, ?, ?, ?, ?, 1)
+                INSERT INTO products (name, category_id, price, description, is_cruelty_free, image_path, available, stock) 
+                VALUES (?, ?, ?, ?, ?, ?, 1, ?)
             ");
-            $stmt->execute([$name, $category_id, $price, $description, $is_cruelty_free, $image_path]);
+            $stmt->execute([$name, $category_id, $price, $description, $is_cruelty_free, $image_path, $stock]);
             
             header('Location: productos.php?success=1');
             exit;
@@ -63,7 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="brand">G&B Admin</div>
             <nav>
                 <ul>
-                    <li><a href="index.php">Órdenes</a></li>
+                    <li><a href="index.php" class="active">Dashboard</a></li>
                     <li><a href="productos.php">Productos</a></li>
                     <li><a href="categorias.php">Categorías</a></li>
                     <li><a href="marcas.php">Marcas</a></li>
@@ -91,29 +99,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <input type="text" name="name" required style="width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px;">
                     </div>
                     
-                    <div style="margin-bottom: 15px;">
-                        <label>Categoría</label><br>
-                        <select name="category_id" required style="width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px;">
-                            <option value="">Selecciona una categoría...</option>
-                            <?php foreach ($categories as $cat): ?>
-                                <option value="<?= $cat['id'] ?>"><?= htmlspecialchars($cat['name']) ?></option>
-                            <?php endforeach; ?>
-                        </select>
+                    <div style="display: flex; gap: 15px; margin-bottom: 15px;">
+                        <div style="flex: 1;">
+                            <label>Categoría</label><br>
+                            <select name="category_id" required style="width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px;">
+                                <option value="">Selecciona...</option>
+                                <?php foreach ($categories as $cat): ?>
+                                    <option value="<?= $cat['id'] ?>"><?= htmlspecialchars($cat['name']) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div style="flex: 1;">
+                            <label>Marca (Opcional)</label><br>
+                            <select name="brand_id" style="width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px;">
+                                <option value="">Sin marca...</option>
+                                <?php foreach ($brands as $b): ?>
+                                    <option value="<?= $b['id'] ?>"><?= htmlspecialchars($b['name']) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
                     </div>
 
-                    <div style="margin-bottom: 15px;">
-                        <label>Marca (Opcional)</label><br>
-                        <select name="brand_id" style="width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px;">
-                            <option value="">Sin marca específica...</option>
-                            <?php foreach ($brands as $b): ?>
-                                <option value="<?= $b['id'] ?>"><?= htmlspecialchars($b['name']) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-
-                    <div style="margin-bottom: 15px;">
-                        <label>Precio (CLP)</label><br>
-                        <input type="number" name="price" required style="width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px;">
+                    <div style="display: flex; gap: 15px; margin-bottom: 15px;">
+                        <div style="flex: 1;">
+                            <label>Precio (CLP)</label><br>
+                            <input type="number" name="price" required style="width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px;">
+                        </div>
+                        
+                        <div style="flex: 1;">
+                            <label>Cantidad en Stock</label><br>
+                            <input type="number" name="stock" value="0" min="0" required style="width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px; font-weight: bold; color: #2c3e50;">
+                        </div>
                     </div>
 
                     <div style="margin-bottom: 15px;">
@@ -136,7 +152,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <div style="margin-bottom: 15px;">
                         <label>Tonos Disponibles (Separados por comas)</label><br>
                         <input type="text" name="tones" 
-                            value="<?= htmlspecialchars($product['tones'] ?? '') ?>" 
+                            value="<?= htmlspecialchars($_POST['tones'] ?? '') ?>" 
                             placeholder="Ej: Claro, Medio, Oscuro" 
                             style="width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px;">
                         <small style="color: #666;">Escribe los tonos que quieres que aparezcan en el desplegable.</small>
