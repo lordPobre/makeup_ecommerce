@@ -2,32 +2,13 @@
 session_start();
 require_once '../config/database.php';
 
-$filtro_marca = filter_input(INPUT_GET, 'brand_id', FILTER_VALIDATE_INT);
-$filtro_categoria = filter_input(INPUT_GET, 'category_id', FILTER_VALIDATE_INT);
+// 1. OBTENER LAS OFERTAS (Solo productos con is_on_sale = 1)
+$stmtOfertas = $pdo->query("SELECT p.*, c.name as category_name FROM products p LEFT JOIN categories c ON p.category_id = c.id WHERE p.available = 1 AND p.is_on_sale = 1 ORDER BY p.id DESC LIMIT 8");
+$ofertas = $stmtOfertas->fetchAll();
 
-// Aseguramos de traer también el stock en la consulta
-$query = "SELECT p.*, c.name as category_name FROM products p JOIN categories c ON p.category_id = c.id WHERE p.available = 1";
-$params = [];
-
-if ($filtro_marca) {
-    $query .= " AND p.brand_id = ?";
-    $params[] = $filtro_marca;
-}
-if ($filtro_categoria) {
-    $query .= " AND p.category_id = ?";
-    $params[] = $filtro_categoria;
-}
-
-$query .= " ORDER BY p.id DESC";
-
-$stmt = $pdo->prepare($query);
-$stmt->execute($params);
-
-$products = $stmt->fetchAll();
+// 2. OBTENER MARCAS (Para el carrusel)
 $stmtBrands = $pdo->query("SELECT * FROM brands");
-$categorias = $pdo->query("SELECT * FROM categories")->fetchAll();
 $brands = $stmtBrands->fetchAll();
-
 
 require_once '../includes/header.php';
 ?>
@@ -62,7 +43,7 @@ require_once '../includes/header.php';
     <div class="hero-text-box">
         <h1>Tu Belleza, Tus Reglas</h1>
         <p>Descubre nuestra nueva línea de básicos imprescindibles.</p>
-        <a href="#catalogo" class="btn-shop">COMPRAR AHORA</a>
+        <a href="catalogo.php" class="btn-shop">COMPRAR AHORA</a>
     </div>
 
     <div class="slider-dots">
@@ -79,13 +60,13 @@ require_once '../includes/header.php';
         <div class="carousel-wrapper">
             <div class="brands-track">
                 <?php foreach ($brands as $brand): ?>
-                    <a href="index.php?brand_id=<?= $brand['id'] ?>#catalogo">
+                    <a href="catalogo.php?brand_id=<?= $brand['id'] ?>">
                         <img src="<?= htmlspecialchars($brand['image_path']) ?>" alt="<?= htmlspecialchars($brand['name']) ?>" title="<?= htmlspecialchars($brand['name']) ?>">
                     </a>
                 <?php endforeach; ?>
                 
                 <?php foreach ($brands as $brand): ?>
-                    <a href="index.php?brand_id=<?= $brand['id'] ?>#catalogo">
+                    <a href="catalogo.php?brand_id=<?= $brand['id'] ?>">
                         <img src="<?= htmlspecialchars($brand['image_path']) ?>" alt="<?= htmlspecialchars($brand['name']) ?>" title="<?= htmlspecialchars($brand['name']) ?>">
                     </a>
                 <?php endforeach; ?>
@@ -95,83 +76,116 @@ require_once '../includes/header.php';
 </section>
 <?php endif; ?>
 
-<main class="product-grid" id="catalogo">
-    <div class="search-container" style="max-width: 600px; margin: 0 auto 30px; position: relative; padding: 0 20px;">
-        <i class="fas fa-search" style="position: absolute; left: 35px; top: 50%; transform: translateY(-50%); color: #999; font-size: 1.2rem;"></i>
-        <input type="text" id="liveSearch" placeholder="Busca tu base, labial o marca favorita..." style="width: 100%; padding: 16px 20px 16px 50px; border: 1px solid #e0e0e0; border-radius: 30px; font-size: 1rem; font-family: 'Montserrat', sans-serif; outline: none; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(0,0,0,0.03);">
-    </div>
-    <div class="catalog-header" style="text-align: center; margin-bottom: 40px; margin-top: 20px;">
-        <h2>
-            <?php 
-            if ($filtro_marca) echo "Filtrado por Marca";
-            elseif ($filtro_categoria) echo "Filtrado por Categoría";
-            else echo "Nuestros Favoritos"; 
-            ?>
-        </h2>
-        
-        <div class="category-filters">
-            <a href="index.php#catalogo" class="filter-btn <?= (!$filtro_categoria && !$filtro_marca) ? 'active' : '' ?>">Ver Todo</a>
-            
-            <?php foreach ($categorias as $cat): ?>
-                <a href="index.php?category_id=<?= $cat['id'] ?>#catalogo" 
-                   class="filter-btn <?= ($filtro_categoria == $cat['id']) ? 'active' : '' ?>">
-                    <?= htmlspecialchars($cat['name']) ?>
-                </a>
-            <?php endforeach; ?>
-        </div>
+<main class="home-container" style="max-width: 1200px; margin: 0 auto; padding: 0 20px;">
+    
+    <div style="
+        position: relative;
+        text-align: center; 
+        padding: 80px 20px; 
+        background: linear-gradient(135deg, #fdf5f6 0%, #f9eef0 100%); 
+        border-radius: 16px; 
+        margin: 40px 0 60px 0;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.03);
+        overflow: hidden;
+    ">
+        <div style="position: absolute; top: -50px; left: -50px; width: 200px; height: 200px; background: rgba(255,255,255,0.6); border-radius: 50%; filter: blur(30px);"></div>
+        <div style="position: absolute; bottom: -50px; right: -50px; width: 250px; height: 250px; background: rgba(231, 76, 60, 0.04); border-radius: 50%; filter: blur(40px);"></div>
 
-        <?php if ($filtro_marca || $filtro_categoria): ?>
-            <a href="index.php#catalogo" style="font-size: 0.8rem; display: inline-block; margin-top: 15px; color: #888; text-decoration: underline;">Quitar todos los filtros</a>
-        <?php endif; ?>
+        <h1 style="
+            position: relative;
+            font-family: 'Montserrat', sans-serif; 
+            font-size: 2.8rem; 
+            font-weight: 300; 
+            color: #1a1a1a; 
+            margin: 0 0 15px 0;
+            letter-spacing: -0.5px;
+            display: block;
+        ">Descubre tu <span style="font-weight: 600; font-style: italic;">brillo interior</span></h1>
+        
+        <p style="
+            position: relative;
+            font-size: 1.1rem; 
+            color: #666; 
+            margin: 0 0 35px 0; 
+            font-weight: 400;
+            display: block;
+        ">Los mejores cosméticos de tus marcas favoritas, ahora en oferta.</p>
+        
+        <a href="catalogo.php" style="
+            position: relative;
+            background: #1a1a1a; 
+            color: white; 
+            padding: 16px 45px; 
+            text-decoration: none; 
+            border-radius: 30px; 
+            display: inline-block; 
+            font-weight: 600; 
+            letter-spacing: 1px; 
+            text-transform: uppercase;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(26,26,26,0.2);
+        " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(26,26,26,0.3)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(26,26,26,0.2)';">
+            Ver todo el catálogo
+        </a>
+    </div>
+
+    <div style="text-align: center; margin-bottom: 40px; display: flex; flex-direction: column; align-items: center;">
+        <h2 style="display: flex; align-items: center; justify-content: center; gap: 12px; font-size: 2rem; color: #1a1a1a; margin-bottom: 10px; font-weight: 600;">
+            Ofertas Especiales
+            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#e74c3c" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-top: -3px; transform: rotate(15deg);">
+                <path d="M12 3c0 4.97-4.03 9-9 9 4.97 0 9 4.03 9 9 0-4.97 4.03-9 9-9-4.97 0-9-4.03-9-9z"></path>
+            </svg>
+        </h2>
+        <div style="width: 60px; height: 3px; background: #1a1a1a; margin: 0 auto; border-radius: 2px;"></div>
     </div>
     
-    <div class="grid-container">
-        <?php if (count($products) > 0): ?>
-            <?php foreach ($products as $product): ?>
-                <div class="product-card">
-                    <a href="producto.php?id=<?= $product['id'] ?>">
-                        <?php $img_src = strpos($product['image_path'], 'http') === 0 ? $product['image_path'] : $product['image_path']; ?>
-                        <img src="<?= htmlspecialchars($img_src) ?>" alt="<?= htmlspecialchars($product['name']) ?>">
-                    </a>
+    <div class="grid-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 25px; margin-bottom: 60px;">
+        <?php if(count($ofertas) > 0): ?>
+            <?php foreach ($ofertas as $product): ?>
+                <div class="product-card" style="position: relative; background: #fff; border-radius: 8px; border: 1px solid #f0f0f0; padding: 15px; text-align: center; transition: box-shadow 0.3s;" onmouseover="this.style.boxShadow='0 8px 25px rgba(0,0,0,0.05)';" onmouseout="this.style.boxShadow='none';">
+                    <span style="position: absolute; top: 15px; left: 15px; background: #e74c3c; color: white; font-weight: 700; padding: 6px 12px; border-radius: 20px; font-size: 0.75rem; letter-spacing: 1px; z-index: 2;">OFERTA</span>
                     
+                    <a href="producto.php?id=<?= $product['id'] ?>" style="display: block; margin-bottom: 15px;">
+                        <img src="<?= htmlspecialchars($product['image_path']) ?>" alt="<?= htmlspecialchars($product['name']) ?>" style="width: 100%; height: 200px; object-fit: contain;">
+                    </a>
                     <div class="product-info">
-                        <p class="category"><?= htmlspecialchars($product['category_name']) ?></p>
-                        <a href="producto.php?id=<?= $product['id'] ?>" style="text-decoration: none; color: inherit;">
-                            <h3><?= htmlspecialchars($product['name']) ?></h3>
-                        </a>
-                        <p class="price">$<?= number_format($product['price'], 0, ',', '.') ?></p>
+                        <p class="category" style="font-size: 0.8rem; color: #999; margin-bottom: 5px; text-transform: uppercase; font-weight: 500;"><?= htmlspecialchars($product['category_name']) ?></p>
+                        <h3 style="margin: 0 0 10px 0; font-size: 1.1rem; font-weight: 600;"><a href="producto.php?id=<?= $product['id'] ?>" style="text-decoration: none; color: #1a1a1a;"><?= htmlspecialchars($product['name']) ?></a></h3>
                         
-                        <?php if ($product['is_cruelty_free']): ?>
-                            <span class="badge">Cruelty Free 🐰</span>
-                        <?php endif; ?>
-                        
-                        <?php if (isset($product['stock']) && $product['stock'] > 0): ?>
-                            <div style="display: flex; gap: 8px; margin-top: 15px;">
-                                <a href="producto.php?id=<?= $product['id'] ?>" style="flex: 1; text-align: center; text-decoration: none; background: #f8f9fa; color: #333; border: 1px solid #ddd; padding: 10px; border-radius: 4px; font-size: 0.85rem; font-weight: 500; transition: background 0.2s;">
-                                    Detalles
-                                </a>
-
-                                <form action="add_to_cart.php" method="POST" class="form-add-cart" style="flex: 1; margin: 0;">
-                                    <input type="hidden" name="product_id" value="<?= $product['id'] ?>">
-                                    <input type="hidden" name="quantity" value="1">
-                                    <button type="submit" style="width: 100%; border: none; cursor: pointer; padding: 10px; border-radius: 4px; background: #1a1a1a; color: white; font-size: 0.85rem; font-weight: 600; transition: transform 0.1s;">
-                                        Agregar
-                                    </button>
-                                </form>
-                            </div>
-                        <?php else: ?>
-                            <div style="margin-top: 15px;">
-                                <span style="display: block; width: 100%; text-align: center; padding: 10px; background: #fdedec; color: #e74c3c; border-radius: 4px; font-weight: 600; font-size: 0.85rem; border: 1px solid #fadbd8;">
-                                    Agotado temporalmente
+                        <div style="margin: 0 0 15px 0; display: flex; align-items: baseline; justify-content: center; gap: 8px;">
+                            <?php if ($product['is_on_sale'] && !empty($product['old_price'])): ?>
+                                <span style="text-decoration: line-through; color: #a0a0a0; font-size: 0.95rem; font-weight: 500;">
+                                    $<?= number_format($product['old_price'], 0, ',', '.') ?>
                                 </span>
-                            </div>
-                        <?php endif; ?>
-                        
+                            <?php endif; ?>
+                            <span class="price" style="color: <?= $product['is_on_sale'] ? '#e74c3c' : '#1a1a1a' ?>; font-weight: 700; font-size: 1.2rem;">
+                                $<?= number_format($product['price'], 0, ',', '.') ?>
+                            </span>
+                        </div>
+
+                        <div style="display: flex; gap: 10px; justify-content: center; margin-top: auto;">
+                            <a href="producto.php?id=<?= $product['id'] ?>" style="flex: 1; padding: 10px 0; border: 1px solid #1a1a1a; color: #1a1a1a; text-decoration: none; border-radius: 4px; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; transition: all 0.3s;" onmouseover="this.style.background='#f9f9f9';" onmouseout="this.style.background='transparent';">
+                                Detalles
+                            </a>
+                            
+                            <form class="form-add-cart" method="POST" action="add_to_cart.php" style="flex: 1; margin: 0;">
+                                <input type="hidden" name="product_id" value="<?= $product['id'] ?>">
+                                <input type="hidden" name="quantity" value="1">
+                                <button type="submit" style="width: 100%; height: 100%; padding: 10px 0; background: #1a1a1a; color: white; border: 1px solid #1a1a1a; border-radius: 4px; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; cursor: pointer; transition: background 0.3s;" onmouseover="this.style.background='#333';" onmouseout="this.style.background='#1a1a1a';">
+                                    Comprar
+                                </button>
+                            </form>
+                        </div>
                     </div>
                 </div>
             <?php endforeach; ?>
         <?php else: ?>
-            <p style="text-align: center; width: 100%; color: #666; font-size: 1.1rem; padding: 40px 0;">No hay productos disponibles en esta selección todavía.</p>
+            <div style="grid-column: 1 / -1; text-align: center; padding: 60px 20px; background: #fff; border: 1px dashed #e0e0e0; border-radius: 12px;">
+                <i class="fas fa-gift" style="font-size: 3rem; color: #f9eef0; margin-bottom: 15px;"></i>
+                <h3 style="color: #1a1a1a; margin-bottom: 10px; font-weight: 500;">Estamos preparando sorpresas</h3>
+                <p style="color: #888; max-width: 400px; margin: 0 auto;">Actualmente estamos actualizando nuestras ofertas. ¡Vuelve pronto para descubrir tus nuevos favoritos a precios increíbles!</p>
+            </div>
         <?php endif; ?>
     </div>
 </main>
@@ -179,61 +193,6 @@ require_once '../includes/header.php';
 <?php require_once '../includes/footer.php'; ?>
 
 <script>
-document.addEventListener('DOMContentLoaded', () => {
-    const searchInput = document.getElementById('liveSearch');
-    const gridContainer = document.querySelector('.grid-container');
-    
-    // Obtenemos los filtros actuales de la URL (para que busque DENTRO de la categoría si estamos en una)
-    const urlParams = new URLSearchParams(window.location.search);
-    const catId = urlParams.get('category_id') || '';
-    const brandId = urlParams.get('brand_id') || '';
-
-    let debounceTimer; // Para no saturar la base de datos si teclean muy rápido
-
-    searchInput.addEventListener('input', function() {
-        clearTimeout(debounceTimer);
-        const query = this.value;
-        
-        // Hacemos que el contenedor se vea un poco transparente mientras busca
-        gridContainer.style.opacity = '0.5';
-
-        debounceTimer = setTimeout(() => {
-            fetch(`buscar_productos.php?q=${encodeURIComponent(query)}&category_id=${catId}&brand_id=${brandId}`)
-                .then(response => response.text())
-                .then(html => {
-                    gridContainer.innerHTML = html;
-                    gridContainer.style.opacity = '1';
-                    
-                    // RE-CONECTAR LOS BOTONES DE AGREGAR AL CARRITO
-                    // (Como creamos HTML nuevo, debemos enseñarle al JS a escucharlos de nuevo)
-                    const newForms = gridContainer.querySelectorAll('.form-add-cart');
-                    newForms.forEach(form => {
-                        form.addEventListener('submit', function(e) {
-                            e.preventDefault();
-                            const formData = new FormData(this);
-                            formData.append('ajax', '1');
-
-                            fetch('add_to_cart.php', { method: 'POST', body: formData })
-                            .then(res => res.json())
-                            .then(data => {
-                                if(data.status === 'success') {
-                                    document.getElementById('toast-msg').textContent = data.message;
-                                    document.getElementById('toast').classList.add('show');
-                                    if(data.cart_html) document.querySelector('.cart-body').innerHTML = data.cart_html;
-                                    setTimeout(() => document.getElementById('toast').classList.remove('show'), 3000);
-                                    setTimeout(() => {
-                                        document.getElementById('offcanvasCart').classList.add('active');
-                                        document.getElementById('cartOverlay').classList.add('active');
-                                    }, 500);
-                                }
-                            });
-                        });
-                    });
-                });
-        }, 300); // Espera 300 milisegundos después de que dejan de escribir
-    });
-});
-
     let currentSlideIndex = 0;
     const slides = document.querySelectorAll('.slide');
     const dots = document.querySelectorAll('.dot');
@@ -284,4 +243,52 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     startInterval();
+
+    document.addEventListener('DOMContentLoaded', () => {
+    const formsAddCart = document.querySelectorAll('.form-add-cart');
+    
+    formsAddCart.forEach(form => {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault(); // Evita que la página recargue
+            
+            const formData = new FormData(this);
+            formData.append('ajax', '1');
+
+            fetch('add_to_cart.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    // Muestra el mensaje verde
+                    const toastMsg = document.getElementById('toast-msg');
+                    const toast = document.getElementById('toast');
+                    if(toastMsg && toast) {
+                        toastMsg.textContent = data.message;
+                        toast.classList.add('show');
+                        setTimeout(() => toast.classList.remove('show'), 3000);
+                    }
+
+                    // Actualiza el HTML del carrito
+                    const cartBody = document.querySelector('.cart-body');
+                    if(cartBody && data.cart_html) {
+                        cartBody.innerHTML = data.cart_html;
+                    }
+
+                    // Abre el carrito lateral automáticamente
+                    setTimeout(() => {
+                        const offcanvasCart = document.getElementById('offcanvasCart');
+                        const cartOverlay = document.getElementById('cartOverlay');
+                        if(offcanvasCart && cartOverlay) {
+                            offcanvasCart.classList.add('active');
+                            cartOverlay.classList.add('active');
+                        }
+                    }, 400);
+                }
+            })
+            .catch(error => console.error('Error al agregar al carrito:', error));
+        });
+    });
+});
 </script>

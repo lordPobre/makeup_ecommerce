@@ -10,34 +10,31 @@ if (!$id) {
     exit;
 }
 
-// --- NUEVA LÓGICA: PROCESAR CAMBIO DE ESTADO E INVENTARIO ---
+// --- PROCESAR CAMBIO DE ESTADO E INVENTARIO ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nuevo_estado'])) {
     $nuevo_estado = htmlspecialchars($_POST['nuevo_estado'], ENT_QUOTES, 'UTF-8');
+    // Capturamos el número de seguimiento
+    $nuevo_tracking = htmlspecialchars($_POST['tracking_number'] ?? '', ENT_QUOTES, 'UTF-8');
     
-    // 1. Verificamos cuál era el estado ANTES de cambiarlo
     $stmtCheck = $pdo->prepare("SELECT status FROM orders WHERE id = ?");
     $stmtCheck->execute([$id]);
     $estado_anterior = $stmtCheck->fetchColumn();
 
-    // 2. Iniciamos transacción de seguridad
     $pdo->beginTransaction();
 
     try {
-        // Si el estado no era cancelado, y ahora lo vamos a cancelar -> REINTEGRAMOS STOCK
+        // Reintegrar stock si se cancela
         if ($estado_anterior !== 'cancelado' && $nuevo_estado === 'cancelado') {
-            // Buscamos qué compró en esta orden
             $stmtItemsCancel = $pdo->prepare("SELECT product_id, quantity FROM order_items WHERE order_id = ?");
             $stmtItemsCancel->execute([$id]);
             $itemsCancel = $stmtItemsCancel->fetchAll();
 
-            // Devolvemos los productos a la tabla products
             $stmtRestore = $pdo->prepare("UPDATE products SET stock = stock + ? WHERE id = ?");
             foreach ($itemsCancel as $item) {
                 $stmtRestore->execute([(int)$item['quantity'], (int)$item['product_id']]);
             }
         }
-
-        // Si el estado ERA cancelado, y ahora lo volvemos a poner como pendiente/pagado -> DESCONTAMOS STOCK DE NUEVO
+        // Descontar stock si sale de cancelado
         elseif ($estado_anterior === 'cancelado' && $nuevo_estado !== 'cancelado') {
             $stmtItemsDeduct = $pdo->prepare("SELECT product_id, quantity FROM order_items WHERE order_id = ?");
             $stmtItemsDeduct->execute([$id]);
@@ -49,9 +46,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nuevo_estado'])) {
             }
         }
 
-        // 3. Actualizamos el estado de la orden
-        $stmtUpdate = $pdo->prepare("UPDATE orders SET status = ? WHERE id = ?");
-        $stmtUpdate->execute([$nuevo_estado, $id]);
+        // Actualizamos el estado Y el tracking number
+        $stmtUpdate = $pdo->prepare("UPDATE orders SET status = ?, tracking_number = ? WHERE id = ?");
+        $stmtUpdate->execute([$nuevo_estado, $nuevo_tracking, $id]);
 
         $pdo->commit();
         header("Location: orden_detalle.php?id=$id&msg=actualizado");
@@ -62,6 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nuevo_estado'])) {
         die("Error al actualizar estado y stock: " . $e->getMessage());
     }
 }
+
 // 1. Consultar la orden principal
 $stmt = $pdo->prepare("SELECT * FROM orders WHERE id = ?");
 $stmt->execute([$id]);
@@ -69,7 +67,7 @@ $order = $stmt->fetch();
 
 if (!$order) { die("Orden no encontrada."); }
 
-// 2. Consultar los productos (usando la tabla corregida)
+// 2. Consultar los productos
 $stmtItems = $pdo->prepare("
     SELECT oi.*, p.name as product_name, p.image_path 
     FROM order_items oi 
@@ -79,23 +77,48 @@ $stmtItems = $pdo->prepare("
 $stmtItems->execute([$id]);
 $items = $stmtItems->fetchAll();
 
-// 3. Lógica de WhatsApp Dinámica
+// --- LÓGICA DE WHATSAPP DEFINITIVA ---
 $telefono_limpio = preg_replace('/[^0-9]/', '', $order['phone'] ?? '');
 if (strlen($telefono_limpio) == 9) { $telefono_limpio = '56' . $telefono_limpio; }
 
-// Personalizamos el mensaje según el estado actual
+$nombre_cliente = htmlspecialchars($order['customer_name'] ?? 'Cliente');
+$id_pedido = $order['id'];
 $estado_actual = $order['status'];
+$num_tracking = $order['tracking_number'] ?? '';
+
+// TRUCO: Definimos los emojis usando sus bytes exactos.
+// Así es imposible que el editor de texto los corrompa.
+$e_corazon = "\xE2\x9D\xA4\xEF\xB8\x8F"; // ❤️
+$e_camion  = "\xF0\x9F\x9A\x9A";         // 🚚
+$e_brillos = "\xE2\x9C\xA8";             // ✨
+
 $texto_wa = "";
 
-if ($estado_actual == 'enviado') {
-    $texto_wa = "¡Hola " . $order['customer_name'] . "! 💖 Te escribimos de Glow & Beauty para contarte que tu pedido #" . $order['id'] . " ya va en camino. 🚚✨";
-} elseif ($estado_actual == 'pagado') {
-    $texto_wa = "¡Hola! Recibimos tu pago por el pedido #" . $order['id'] . ". 🌸 Ya estamos preparando tus productos con mucho amor.";
-} else {
-    $texto_wa = "¡Hola " . $order['customer_name'] . "! 💖 Te contactamos de Glow & Beauty respecto a tu pedido #" . $order['id'] . ".";
+switch ($estado_actual) {
+    case 'pagado':
+        $texto_wa = "¡Hola " . $nombre_cliente . "! " . $e_corazon . " Te contactamos de Glow & Beauty respecto a tu pedido #" . $id_pedido . " para informarte que el pago de tu compra fue recibido con éxito. " . $e_brillos;
+        break;
+
+    case 'enviado':
+        $info_tracking = !empty($num_tracking) ? " El número de seguimiento es: " . $num_tracking : "";
+        $texto_wa = "¡Hola " . $nombre_cliente . "! " . $e_corazon . " Te contactamos de Glow & Beauty para avisarte que tu pedido #" . $id_pedido . " ya fue enviado. " . $e_camion . $info_tracking;
+        break;
+
+    case 'entregado':
+        $texto_wa = "¡Hola " . $nombre_cliente . "! " . $e_corazon . " Te contactamos de Glow & Beauty respecto a tu pedido #" . $id_pedido . " para que nos confirmes que fue bien recibido. ¡Disfruta tus productos! " . $e_brillos;
+        break;
+
+    case 'cancelado':
+        $texto_wa = "¡Hola " . $nombre_cliente . "! " . $e_corazon . " Te contactamos de Glow & Beauty respecto a tu pedido #" . $id_pedido . " para informarte sobre la cancelación de tu orden.";
+        break;
+
+    default: // Pendiente
+        $texto_wa = "¡Hola " . $nombre_cliente . "! " . $e_corazon . " Te contactamos de Glow & Beauty respecto a tu pedido #" . $id_pedido . ". Estamos atentos para ayudarte a completar tu compra.";
+        break;
 }
 
-$mensaje_url = urlencode($texto_wa);
+// Usamos rawurlencode, que es el formato más seguro para enlaces de WhatsApp
+$mensaje_url = rawurlencode($texto_wa);
 ?>
 
 <!DOCTYPE html>
@@ -142,7 +165,11 @@ $mensaje_url = urlencode($texto_wa);
                             <option value="entregado" <?= $order['status'] == 'entregado' ? 'selected' : '' ?>>Entregado</option>
                             <option value="cancelado" <?= $order['status'] == 'cancelado' ? 'selected' : '' ?>>Cancelado</option>
                         </select>
-                        <button type="submit" class="btn-action" style="width: 100%; background: #2c3e50; border: none; cursor: pointer;">Actualizar Estado</button>
+
+                        <label style="margin-top: 10px; display: block;">Número de Seguimiento (Opcional):</label>
+                        <input type="text" name="tracking_number" placeholder="Ej: 123456789" value="<?= htmlspecialchars($order['tracking_number'] ?? '') ?>" style="width: 100%; padding: 10px; margin: 10px 0 15px; border-radius: 4px; border: 1px solid #ddd; box-sizing: border-box;">
+
+                        <button type="submit" class="btn-action" style="width: 100%; background: #2c3e50; border: none; cursor: pointer;">Actualizar Estado y Tracking</button>
                     </form>
 
                     <?php if (!empty($telefono_limpio)): ?>
@@ -186,9 +213,27 @@ $mensaje_url = urlencode($texto_wa);
                             <?php endforeach; ?>
                         </tbody>
                         <tfoot>
+                           <tr>
+                                <td colspan="3" style="text-align: right; padding: 10px; border-top: 2px solid #eee;"><strong>Subtotal Productos:</strong></td>
+                                <td style="text-align: right; padding: 10px; border-top: 2px solid #eee;">
+                                    $<?= number_format($order['total'] - ($order['shipping_cost'] ?? 0), 0, ',', '.') ?>
+                                </td>
+                            </tr>
+
                             <tr>
-                                <td colspan="3" style="text-align: right; padding-top: 15px;"><strong>TOTAL:</strong></td>
-                                <td style="padding-top: 15px; font-size: 1.2rem;"><strong>$<?= number_format($order['total'], 0, ',', '.') ?></strong></td>
+                                <td colspan="3" style="text-align: right; padding: 10px; color: #666;"><strong>Costo de Envío:</strong></td>
+                                <td style="text-align: right; padding: 10px; color: #666;">
+                                    $<?= number_format($order['shipping_cost'] ?? 0, 0, ',', '.') ?>
+                                </td>
+                            </tr>
+
+                            <tr style="font-size: 1.2rem; background: #f9f9f9;">
+                                <td colspan="3" style="text-align: right; padding: 15px;">
+                                    <strong style="text-transform: uppercase; letter-spacing: 1px;">Total Final:</strong>
+                                </td>
+                                <td style="text-align: right; padding: 15px;">
+                                    <strong style="color: #1a1a1a;">$<?= number_format($order['total'], 0, ',', '.') ?></strong>
+                                </td>
                             </tr>
                         </tfoot>
                     </table>

@@ -8,6 +8,37 @@ if (empty($_SESSION['cart'])) {
     exit;
 }
 
+$total_carrito = 0;
+
+// Calculamos el total real consultando la base de datos
+if (!empty($_SESSION['cart'])) {
+    $product_ids = [];
+    foreach ($_SESSION['cart'] as $cart_key => $item) {
+        $parts = explode('_', $cart_key);
+        $product_ids[] = (int)$parts[0];
+    }
+    
+    $product_ids = array_unique($product_ids);
+    $inQuery = implode(',', array_fill(0, count($product_ids), '?'));
+    $stmt = $pdo->prepare("SELECT id, price FROM products WHERE id IN ($inQuery)");
+    $stmt->execute(array_values($product_ids));
+    
+    $prices = $stmt->fetchAll(PDO::FETCH_KEY_PAIR); // Crea un array [id => precio]
+
+    foreach ($_SESSION['cart'] as $cart_key => $item) {
+        $parts = explode('_', $cart_key);
+        $id = (int)$parts[0];
+        if (isset($prices[$id])) {
+            $total_carrito += ($prices[$id] * $item['quantity']);
+        }
+    }
+}
+
+if (empty($_SESSION['cart'])) {
+    header('Location: index.php');
+    exit;
+}
+
 require_once '../includes/header.php';
 ?>
 
@@ -42,6 +73,21 @@ require_once '../includes/header.php';
                     <label>Ciudad / Comuna</label>
                     <input type="text" name="city" required placeholder="Viña del Mar">
                 </div>
+                <div class="form-group">
+                    <label>Región de Envío</label>
+                    <select name="region" id="regionSelector" class="form-control" required>
+                        <option value="" data-cost="0">Selecciona tu región...</option>
+                        <option value="Metropolitana" data-cost="3500">Región Metropolitana ($3.500)</option>
+                        <option value="Valparaiso" data-cost="5500">Región de Valparaíso ($5.500)</option>
+                        <option value="Otras" data-cost="7500">Otras Regiones ($7.500)</option>
+                    </select>
+                </div>
+                <div class="summary-box" style="background: #f9f9f9; padding: 20px; border-radius: 8px; margin-top: 20px;">
+                    <p>Subtotal: <span id="subtotalDisplay">$<?= number_format($total_carrito, 0, ',', '.') ?></span></p>
+                    <p>Envío: <span id="shippingDisplay">$0</span></p>
+                    <hr>
+                    <h3 style="margin: 0;">Total: <span id="totalDisplay">$<?= number_format($total_carrito, 0, ',', '.') ?></span></h3>
+                </div>
                 
                 <button type="submit" class="btn-checkout">Confirmar y Realizar Pedido</button>
             </form>
@@ -60,6 +106,24 @@ require_once '../includes/header.php';
     if (value.match(/^(\d{2})(\d{3})(\d{3})([\dkK]{1})$/)) {
         e.target.value = value.replace(/^(\d{2})(\d{3})(\d{3})([\dkK]{1})$/, '$1.$2.$3-$4');
     }
+});
+
+document.getElementById('regionSelector').addEventListener('change', function() {
+    // Obtener el costo del atributo data-cost del option seleccionado
+    const selectedOption = this.options[this.selectedIndex];
+    const shippingCost = parseInt(selectedOption.getAttribute('data-cost'));
+    const subtotal = <?= $total_carrito ?>; // El total de los productos desde PHP
+
+    // Formatear a moneda chilena
+    const formatter = new Intl.NumberFormat('es-CL', {
+        style: 'currency',
+        currency: 'CLP',
+        minimumFractionDigits: 0
+    });
+
+    // Actualizar la interfaz
+    document.getElementById('shippingDisplay').innerText = formatter.format(shippingCost);
+    document.getElementById('totalDisplay').innerText = formatter.format(subtotal + shippingCost);
 });
 </script>
 

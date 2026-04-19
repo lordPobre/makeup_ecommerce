@@ -24,6 +24,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Capturamos el stock que viene del formulario
     $stock = (int)($_POST['stock'] ?? 0);
 
+    $is_on_sale = isset($_POST['is_on_sale']) ? 1 : 0;
+
     if (empty($name) || empty($category_id) || $price <= 0) {
         $mensaje = "Por favor, completa el nombre, selecciona una categoría y pon un precio válido.";
     } else {
@@ -42,11 +44,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         try {
             // Agregamos 'stock' a la consulta INSERT
-            $stmt = $pdo->prepare("
-                INSERT INTO products (name, category_id, price, description, is_cruelty_free, image_path, available, stock) 
-                VALUES (?, ?, ?, ?, ?, ?, 1, ?)
-            ");
-            $stmt->execute([$name, $category_id, $price, $description, $is_cruelty_free, $image_path, $stock]);
+            $stmt = $pdo->prepare("INSERT INTO products (name, description, price, stock, category_id, brand_id, is_cruelty_free, is_on_sale, image_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$name, $description, $price, $stock, $category_id, $brand_id, $is_cruelty_free, $is_on_sale, $image_path]);
             
             header('Location: productos.php?success=1');
             exit;
@@ -140,6 +139,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <div style="margin-bottom: 15px;">
                         <label>Descripción</label><br>
                         <textarea name="description" rows="4" required style="width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px;"></textarea>
+                    </div>
+
+                    <div style="margin-bottom: 20px; background: #fff; padding: 15px; border-radius: 8px; border: 1px solid #eee;">
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 600; color: #1a1a1a;">
+                            <input type="checkbox" name="is_on_sale" value="1" style="width: 18px; height: 18px; accent-color: #e74c3c;">
+                            <span>¿Poner este producto en OFERTA? 🔥</span>
+                        </label>
+                        <p style="font-size: 0.85rem; color: #888; margin: 5px 0 0 28px;">Si lo marcas, aparecerá automáticamente en la sección de Ofertas Especiales del inicio.</p>
                     </div>
 
                     <div style="margin-bottom: 25px;">

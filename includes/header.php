@@ -22,7 +22,7 @@ if (isset($_SESSION['cart'])) {
         <div class="logo">Glow & Beauty</div>
         <ul class="nav-links">
             <li><a href="index.php">Inicio</a></li>
-            <li><a href="index.php">Catálogo</a></li>
+            <li><a href="catalogo.php">Catálogo</a></li>
             <li><a href="nosotros.php">Nosotros</a></li>
             
             <li>
